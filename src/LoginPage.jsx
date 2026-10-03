@@ -50,7 +50,53 @@ export default function LoginPage() {
   //   }
   // }
 
-  const googleLogin = useGoogleLogin({
+//   const googleLogin = useGoogleLogin({
+//   flow: "auth-code",
+
+//   onSuccess: async (response) => {
+//     setError("");
+//     setIsSubmitting(true);
+
+//     try {
+//       const result = await fetch(
+//         `${API_BASE_URL}/api/auth/google`,
+//         {
+//           method: "POST",
+//           headers: {
+//             "Content-Type": "application/json",
+//             Accept: "application/json",
+//           },
+//           credentials: "include",
+//           body: JSON.stringify({
+//             code: response.code,
+//           }),
+//         }
+//       );
+
+//       if (!result.ok) {
+//         throw new Error(
+//           "Google sign-in failed. Please try again."
+//         );
+//       }
+
+//       window.location.assign("/dashboard");
+//     } catch (err) {
+//       setError(
+//         err instanceof Error
+//           ? err.message
+//           : "Unable to sign in with Google."
+//       );
+//     } finally {
+//       setIsSubmitting(false);
+//     }
+//   },
+
+//   onError: () => {
+//     setError("Google sign-in was cancelled or failed.");
+//   },
+// });
+
+const googleLogin = useGoogleLogin({
   flow: "auth-code",
 
   onSuccess: async (response) => {
@@ -64,7 +110,6 @@ export default function LoginPage() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Accept: "application/json",
           },
           credentials: "include",
           body: JSON.stringify({
@@ -73,13 +118,30 @@ export default function LoginPage() {
         }
       );
 
+      const data = await result.json();
+
       if (!result.ok) {
         throw new Error(
-          "Google sign-in failed. Please try again."
+          data.message || "Google sign-in failed."
         );
       }
 
+      // Check the verified company email returned by backend
+      const email = data.email?.toLowerCase();
+
+      if (
+        !email ||
+        !/^[a-z0-9._%+-]+@skkhetaninfra\.in$/.test(email)
+      ) {
+        setError(
+          "Please sign in using your company email address (@skkhetaninfra.in)."
+        );
+        return;
+      }
+
+      // Allow only company email users to proceed
       window.location.assign("/dashboard");
+
     } catch (err) {
       setError(
         err instanceof Error
@@ -92,7 +154,7 @@ export default function LoginPage() {
   },
 
   onError: () => {
-    setError("Google sign-in was cancelled or failed.");
+    setError("Google sign-in failed. Please try again.");
   },
 });
 
@@ -103,17 +165,24 @@ export default function LoginPage() {
   const cleanEmail = username.trim();
 
   // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@skkhetaninfra\.in$/;
 
   if (!cleanEmail) {
     setError("Please enter your email address.");
     return;
   }
 
+  // if (!emailRegex.test(cleanEmail)) {
+  //   setError("Please enter a valid email address.");
+  //   return;
+  // }
   if (!emailRegex.test(cleanEmail)) {
-    setError("Please enter a valid email address.");
-    return;
-  }
+  setError(
+    "Please enter a valid company email address"
+  );
+  return;
+}
 
   // Validate password
   if (!password) {
@@ -149,46 +218,85 @@ export default function LoginPage() {
   // Submit only after all validations pass
   setIsSubmitting(true);
 
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/api/auth/login`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          username: cleanEmail,
-          password: password
-        })
-      }
-    );
+  // try {
+  //   const response = await fetch(
+  //     `${API_BASE_URL}/api/auth/login`,
+  //     {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         "Accept": "application/json"
+  //       },
+  //       credentials: "include",
+  //       body: JSON.stringify({
+  //         username: cleanEmail,
+  //         password: password
+  //       })
+  //     }
+  //   );
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error("Invalid email or password.");
-      }
-      if (response.status === 429) {
-        throw new Error(
-          "Too many attempts. Please try again later."
-        );
-      }
-      throw new Error("Login failed. Please try again.");
+  //   if (!response.ok) {
+  //     if (response.status === 401) {
+  //       throw new Error("Invalid email or password.");
+  //     }
+  //     if (response.status === 429) {
+  //       throw new Error(
+  //         "Too many attempts. Please try again later."
+  //       );
+  //     }
+  //     throw new Error("Login failed. Please try again.");
+  //   }
+
+  //   window.location.assign("/dashboard");
+
+  // } catch (err) {
+  //   setError(
+  //     err instanceof Error
+  //       ? err.message
+  //       : "Something went wrong. Please try again."
+  //   );
+  // } finally {
+  //   setIsSubmitting(false);
+  // }
+
+
+  
+try {
+  const response = await fetch(
+    `${API_BASE_URL}/api/auth/login`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: password
+      })
     }
+  );
 
-    window.location.assign("/dashboard");
+  const data = await response.json();
 
-  } catch (err) {
-    setError(
-      err instanceof Error
-        ? err.message
-        : "Something went wrong. Please try again."
+  if (!response.ok) {
+    throw new Error(
+      data.detail || "Login failed. Please try again."
     );
-  } finally {
-    setIsSubmitting(false);
   }
+
+  localStorage.setItem("access_token", data.access_token);
+  window.location.assign("/dashboard");
+
+} catch (err) {
+  setError(
+    err instanceof Error
+      ? err.message
+      : "Something went wrong. Please try again."
+  );
+} finally {
+  setIsSubmitting(false);
+}
 }
 
   // function handleGoogleSignIn() {
